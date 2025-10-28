@@ -1,0 +1,125 @@
+2.
+Non
+
+3.
+grep "^+.*tcp" out.tr | awk '$2 >= 0 && $2 <= 5 && $3 == 1 {sum += $6} END {print sum}'
+64520
+
+grep "^+.*tcp" out.tr | awk '$2 >= 0 && $2 <= 5 && $3 == 1 {sum += $6} END {print (sum * 8) / (5 * 10^6) " Mb/s"}'
+0.103232 Mb/s
+
+Pourquoi ce calcul est une approximation ?
+Nous utilisons une durée fixe (5 secondes), mais les paquets ne sont pas envoyés de manière parfaitement régulière.
+Les tailles des paquets incluent souvent des en-têtes TCP/IP qui ne font pas partie des données utiles.
+Si certains paquets sont perdus ou retransmis, cela n'est pas directement pris en compte.
+
+4.
+Oui, cette méthode peut être appliquée à un flux UDP en remplaçant tcp par udp dans la commande grep pour filtrer les lignes correspondantes au protocole UDP.
+
+5.
+grep "^+.*tcp" out.tr | awk '$2 >= 0 && $2 <= 5 && $3 == 2 {sum += $6} END {print sum}'
+620960
+
+grep "^+.*tcp" out.tr | awk '$2 >= 0 && $2 <= 5 && $3 == 2 {sum += $6} END {print (sum * 8) / (5 * 10^6) " Mb/s"}'
+0.993536 Mb/s
+
+6.
+Les débits des flux 1 et 2 diffèrent car le flux 2, actif plus longtemps, profite davantage des ressources réseau partagées et des mécanismes d'adaptation du protocole TCP.
+
+7.
+La somme des débits des flux 1 et 2 dépasse la capacité du lien (1.096768 Mb/s), saturant le lien goulet d’étranglement. Cela est insatisfaisant pour l'opérateur réseau en raison de la congestion, 
+et pour les utilisateurs, car le partage de la bande passante est déséquilibré, favorisant le flux 2 au détriment du flux 1.
+
+8.
+grep "^+.*tcp" out.tr | awk '$2 >= 7 && $2 <= 10 && $3 == 2 {sum += $6} END {print (sum * 8) / (3 * 10^6) " Mb/s"}'
+0.837547 Mb/s
+
+Le débit moyen du flux 2 entre 7s et 10s (0.837547 Mb/s) est inférieur à celui observé entre 0s et 5s (0.993536 Mb/s). Cela peut s'expliquer par l'effet de la congestion sur le lien goulet 
+d'étranglement pendant cette période ou par des limitations dans le contrôle de flux ou la fenêtre d'envoi du protocole TCP.
+
+9. 
+Le taux d'utilisation du lien goulet d'étranglement a diminué sur la période de 7s à 10s, car le débit moyen du flux 2 (0.837547 Mb/s) est inférieur à la capacité totale du lien (1 Mb/s). 
+Cela peut indiquer une baisse de l'efficacité d'utilisation du lien, due à une réduction de la demande ou à des limitations liées au protocole TCP, comme la gestion de la congestion ou de la fenêtre d'envoi.
+
+10.
+grep "tcp.*ack 41" out.tr | awk '$3 == 2'
+
+L'absence de l'ACK numéroté 41 pour le flux 2 s'explique par une perte de segments ou par l'arrêt de la transmission avant d'atteindre ce numéro, en raison de la congestion ou des limitations du protocole TCP.
+
+11. 12.
+Débit moyen pour le flux 1 entre 0s et 5s
+grep "^+.*tcp" out.tr | awk '$2 >= 0 && $2 <= 5 && $3 == 1 {sum += $6} END {print "Débit moyen (flux 1): " (sum * 8) / (5 * 10^6) " Mb/s"}'
+
+Débit moyen pour le flux 2 entre 7s et 10s
+grep "^+.*tcp" out.tr | awk '$2 >= 7 && $2 <= 10 && $3 == 2 {sum += $6} END {print "Débit moyen (flux 2): " (sum * 8) / (3 * 10^6) " Mb/s"}'
+Débit moyen (flux 1): 0.103232 Mb/s
+Débit moyen (flux 2): 0.837547 Mb/s
+
+
+Taux de pertes pour le flux 1
+sent_flux1=$(grep "^+.*tcp" out.tr | awk '$3 == 1' | wc -l)
+received_flux1=$(grep "^r.*ack" out.tr | awk '$3 == 1' | wc -l)
+echo "Taux de pertes (flux 1): $((100 * (sent_flux1 - received_flux1) / sent_flux1))%"
+
+
+Taux de pertes pour le flux 2
+sent_flux2=$(grep "^+.*tcp" out.tr | awk '$3 == 2' | wc -l)
+received_flux2=$(grep "^r.*ack" out.tr | awk '$3 == 2' | wc -l)
+echo "Taux de pertes (flux 2): $((100 * (sent_flux2 - received_flux2) / sent_flux2))%"
+Taux de pertes (flux 1): 100%
+Taux de pertes (flux 2): 4%
+
+
+RTT moyen pour le flux 1
+awk '/^\+.*tcp/ {if ($3 == 1) sent[$6] = $2} /^r.*ack/ {if ($6 in sent && $3 == 1) {rtt = $2 - sent[$6]; sum += rtt; count++}} END {if (count > 0) print "RTT moyen (flux 1): " (sum / count) " s"; else print "RTT moyen (flux 1): 0 s"}' out.tr
+RTT moyen (flux 1): 0 s
+
+RTT moyen pour le flux 2
+awk '/^\+.*tcp/ {if ($3 == 2) sent[$6] = $2} /^r.*ack/ {if ($6 in sent && $3 == 2) {rtt = $2 - sent[$6]; sum += rtt; count++}} END {if (count > 0) print "RTT moyen (flux 2): " (sum / count) " s"; else print "RTT moyen (flux 2): 0 s"}' out.tr
+RTT moyen (flux 2): 4.73448 s
+
+Les résultats montrent que le débit moyen du flux 2 est nettement supérieur à celui du flux 1, car le flux 1 subit une perte totale des paquets (100% de pertes), tandis que le flux 2 ne subit que 4% de pertes. 
+De plus, l'absence d'ACK pour le flux 1 explique pourquoi son RTT moyen est nul, contrairement au flux 2 qui a un RTT moyen mesurable de 4,73448 secondes.
+
+
+//////////////////
+
+
+Ces résultats indiquent que le flux 1 bénéficie d’un débit légèrement plus élevé (1,794 Mbit/s), ne subit aucune perte (0 %) et présente un RTT moyen plus faible (environ 18 ms), tandis que le flux 2, 
+avec un débit d’environ 1 Mbit/s, perd près de 0,91 % de ses paquets et présente un RTT un peu plus élevé (environ 31 ms). En d’autres termes, la congestion ou la latence impacte davantage le flux 2 que 
+le flux 1.
+
+P2:
+
+3.
+set val(prop)           Propagation/TwoRayGround   ;# radio-propagation model
+indique que le modèle de propagation utilisé est TwoRayGround.
+
+set val(ant)            Antenna/OmniAntenna        ;# antenna model
+montre que le modèle d’antenne choisi est OmniAntenna (antenne omnidirectionnelle).
+
+5.
+Les premières lignes de trace montrent d’abord les paquets de contrôle AODV (RREQ/RREP) et ARP (REQUEST/REPLY) nécessaires pour découvrir la route et résoudre les adresses IP/MAC, puis le flux CBR et les 
+acquittements MAC 802.11. On observe aussi des paquets droppés dans l’IFQ du fait que la file d’attente se sature lorsque le flux CBR (20 Mb/s) dépasse la capacité Wi‐Fi (11 Mb/s).
+
+6.
+s 0.004461818 _0_ MAC  --- 0 cbr 1578 [13a 1 0 800] ------- [0:0 1:0 30 1] [0] 0 0
+donc a 004461818 s.
+
+7.
+Même si le flux CBR est en UDP (donc sans acquittement au niveau transport), le protocole 802.11 envoie des ACKs au niveau MAC pour chaque trame de données reçue. 
+Dans la trace, ces ACKs proviennent donc de la couche MAC du nœud récepteur (nœud 1), qui acquitte la réception des paquets envoyés par le nœud 0.
+
+8.
+Dans la trace, on voit des lignes comme "D 0.019225000 _0_ IFQ  --- 32 cbr 1520 ... " où _0_ indique que ces drops se produisent au niveau du nœud 0, dans sa file d’attente (IFQ). 
+C’est normal puisque le débit d’émission (20 Mb/s) dépasse la capacité effective du lien (11 Mb/s) ; la file d’attente se remplit, puis certains paquets sont rejetés lorsque la queue est pleine.
+
+10. 
+Débit moyen (flux CBR) : 6.112 Mbit/s
+
+11. 11Mb et 1500 : 6.112 Mbit/s
+11mb et 500 : 3.303 Mbit/s
+1mb et 1500 : 0.914 Mbit/s
+1mb et 500 : 0.785 Mbit/s
+
+12.

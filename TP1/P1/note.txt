@@ -1,0 +1,203 @@
+1.3 :
+Un lien full-duplex permet une communication bidirectionnelle simultanée, tandis qu'une politique Drop Tail abandonne les nouveaux paquets arrivant lorsque la file d'attente est pleine, sans discrimination.
+
+1.4 :
+Dtransmission = TaillePaquet / DébitLien
+TaillePaquet (trace) = 1000 octets -> 8000 bits, DébitLien (tcl) = 1Mbps -> 10^6 b/s
+
+DebitApplicatif = TaillePaquet / IntervalleEntre2transmissions
+IntervalleEntre2transmissions = 0.005s. ici
+
+Le délai minimum de bout-en-bout pour un paquet UDP est de 18 ms, et le débit applicatif du flux UDP au niveau du nœud 𝑛0 est de 1.6 Mbps.
+
+1.5 :
+Le fichier de traces out.tr enregistre les événements réseau de la simulation avec des champs comme : type d'événement (+ pour envoi, r pour réception, d pour perte), temps, nœud source/destination, 
+type de paquet, taille, flux ID, et numéros de séquence. Vous pouvez l'utiliser pour :
+
+Calculer les délai de bout-en-bout (différence entre + et r),
+Mesurer le taux de perte (événements d),
+Évaluer le volume de trafic (nombre de paquets envoyés et reçus).
+Les figures fournies montrent un exemple avec des flux CBR et TCP pour aider à l'interprétation.
+
+1.6 :
+Le paquet UDP numéro de séquence 10 a été généré à 0,55 secondes et a commencé son émission sur le lien à 0,58 secondes.
++ 0.55 0 1 cbr 1000 ------- 1 0.0 1.0 10 10
+- 0.58 0 1 cbr 1000 ------- 1 0.0 1.0 10 10
+
+1.7:
+r 0.598 0 1 cbr 1000 ------- 1 0.0 1.0 10 10
+
+Temps d'attente = Temps de sortie - Temps d'entrée
+                = 0.58 - 0.55
+                = 0.03 secondes
+
+Temps d’émission et délai = Temps de réception - Temps de sortie
+                          = 0.598 - 0.58
+                          = 0.018 secondes
+
+1.8 :
+Délai de bout-en-bout = Temps de réception - Temps d'entrée
+                      = 0.598 - 0.55
+                      = 0.048 secondes
+
+Le délai de bout-en-bout calculé pour le 10ᵉ paquet UDP est de 48 ms, ce qui est supérieur au délai minimum de 18 ms mentionné dans la question d'avant. Cette différence s’explique 
+par des facteurs dynamiques du réseau, tels que la congestion ou le temps d'attente dans les files d'attente, qui augmentent le délai réel par rapport au délai théorique minimum.
+
+2.4 :
+Le premier est le numéro de séquence : Unique par flux, Défini par le protocole ou l'application, ex :Suivi d’un flux spécifique.
+et le deuxieme l'ID du paquet : Unique dans toute la simulation, Attribué par le simulateur NS-2, Suivi global du paquet (traversant différents nœuds et flux).
+
+2.5 :
+grep " tcp " out.tr
+On vois 1040 car on inclus les en-têtes TCP/IP qui font 20 chacune : 1000 + 20 + 20 = 1040
+
+2.6 :
+On ne peux pas seulement a partir de la trace, il faut passer par le calcul avec la Taille du paquet(trace) et le débit du lien(tcl), Temission = TaillePaquet/DebitLien
+
+2.7 :
+grep " 100$" out.tr
+grep "^+.* 100$" out.tr  # Pour afficher les événements de génération
+grep "^r.* 100$" out.tr  # Pour afficher les événements de réception
+grep " 100$" out.tr | wc -l # Pour compter
+
+2.8 :
+grep " tcp " out.tr | awk '$2 > 3 && $3 == 0 {print $0}'
+
+r 3.00728 0 2 tcp 1040 ------- 0 0.0 3.0 92 417
++ 3.009333 0 2 tcp 1040 ------- 0 0.0 3.0 93 421
+- 3.009333 0 2 tcp 1040 ------- 0 0.0 3.0 93 421
++ 3.020213 0 2 tcp 1040 ------- 0 0.0 3.0 94 424
+- 3.020213 0 2 tcp 1040 ------- 0 0.0 3.0 94 424
+r 3.023493 0 2 tcp 1040 ------- 0 0.0 3.0 93 421
+r 3.034373 0 2 tcp 1040 ------- 0 0.0 3.0 94 424
++ 3.036427 0 2 tcp 1040 ------- 0 0.0 3.0 95 428
+- 3.036427 0 2 tcp 1040 ------- 0 0.0 3.0 95 428
+...
+
+n0
+Num séquence : 93
+ + : 3.009333
+ - : 3.009333
+ Tattente = (T-) - (T+) = 0s
+
+ n2
+ + : 3.023493s
+ - : 3.036427s
+ Tattente = 0.012934s
+
+2.9:
+Non, les délais d’attente ne seront pas les mêmes pour tous les paquets TCP. Cela s’explique par plusieurs facteurs, notamment l’occupation des files d’attente, le taux d’arrivée des paquets, 
+et le taux de service des liens. De plus, le protocole TCP ajuste dynamiquement son débit en fonction de l’état du réseau (congestion ou pertes), ce qui provoque des variations dans les délais. 
+Dans le cas de la coexistence avec UDP, les paquets TCP peuvent également subir des délais supplémentaires dus à la concurrence pour la bande passante. Ainsi, chaque paquet TCP peut rencontrer 
+des conditions différentes, entraînant des délais d’attente variables.
+
+2.10 :
+   - Si le lien n_2 -> n_3 est occupé par d’autres paquets (TCP ou UDP), les paquets UDP devront attendre dans la file jusqu’à ce que le lien soit libre.
+
+3.3 :
+Tperte(%) = (NbPaquetPerdu / NbPaquetsEnvoyés) x 100
+où NbPaquetPerdu = NbPaquetsEnvoyés - NbPaquetsReçu
+
+Pour calculer le taux de paquets UDP perdus entre les instants t1 et t2, la procédure consiste à identifier tous les événements où des paquets UDP sont envoyés ("+") 
+et perdus ("d") pendant cette période. Le taux de perte est alors déterminé en divisant le nombre total de paquets perdus par le nombre total de paquets envoyés durant l'intervalle, puis en multipliant 
+ce rapport par 100 pour obtenir un pourcentage.
+
+3.4 :
+./script.awk 1 2 out.tr
+Intervalle: [1, 2]
+Paquets envoyés: 250
+Paquets reçus: 188
+Paquets perdus: 62
+Taux de perte: 24.80%
+
+./script.awk 2 3 out.tr
+Intervalle: [2, 3]
+Paquets envoyés: 250
+Paquets reçus: 184
+Paquets perdus: 66
+Taux de perte: 26.40%
+
+./script.awk 3 4 out.tr
+Intervalle: [3, 4]
+Paquets envoyés: 250
+Paquets reçus: 187
+Paquets perdus: 63
+Taux de perte: 25.20%  
+
+3.5 :
+Tdelai = Tarrivé - Tenvoie
+Tmoy = Somme Tdelai / Npaquets
+où Npaquets = nb paquets reçu dans la periode [t1,t2]
+
+Lorsque l'événement "+" est détecté (envoi de paquet) et qu'il concerne un paquet UDP ("cbr"), le temps d'envoi est enregistré dans un tableau, indexé par le numéro de séquence du paquet.
+
+Lorsque l'événement "r" est détecté (réception d'un paquet) et qu'il concerne un paquet UDP, le script vérifie si le numéro de séquence du paquet a un temps d'envoi enregistré. 
+Si oui, le délai est calculé comme la différence entre le temps de réception et le temps d'envoi. Ce délai est ajouté à la somme des délais, et le compteur de paquets est incrémenté.
+
+À la fin du traitement, le délai moyen est calculé en divisant la somme des délais par le nombre de paquets reçus.
+
+
+3.6 :
+awk -v t1=1 -v t2=2 -f calculate.awk out.tr
+Période [1, 2] :
+  Paquets reçus   : 201
+  Délai moyen     : 0.074697 s
+
+awk -v t1=2 -v t2=3 -f calculate.awk out.tr
+Période [2, 3] :
+  Paquets reçus   : 197
+  Délai moyen     : 0.072577 s
+
+awk -v t1=3 -v t2=4 -f calculate.awk out.tr
+Période [3, 4] :
+  Paquets reçus   : 201
+  Délai moyen     : 0.075951 s
+
+3.7 :
+Intervalle: [1, 2]
+Paquets envoyés: 250
+Paquets reçus: 188
+Paquets perdus: 62
+Taux de perte: 24.80%
+
+Intervalle: [2, 3]
+Paquets envoyés: 250
+Paquets reçus: 187
+Paquets perdus: 63
+Taux de perte: 25.20%
+
+Intervalle: [3, 4]
+Paquets envoyés: 250
+Paquets reçus: 188
+Paquets perdus: 62
+Taux de perte: 24.80%
+
+Période [1, 2] :
+  Paquets reçus   : 287
+  Délai moyen     : 0.507605 s
+
+Période [2, 3] :
+  Paquets reçus   : 290
+  Délai moyen     : 0.754534 s
+
+Période [3, 4] :
+  Paquets reçus   : 252
+  Délai moyen     : 0.772303 s
+
+CONCLUSION :
+
+Buffer 10 :
+Les taux de perte sont légèrement variables entre les intervalles, allant de 24.80% à 26.40%.
+Buffer 100 :
+Les taux de perte sont similaires ou identiques à ceux obtenus avec un buffer de 10.
+
+Les taux de pertes sont plutot similaire, avec un buffer plus grand (100), les taux de perte n'ont pas changé de manière significative, car la capacité d'absorption du réseau a atteint sa limite. 
+Les pertes sont principalement dues à la congestion dans d'autres parties du réseau, comme les goulots d'étranglement.
+
+Buffer 10 :
+Les délais moyens pour les périodes sont courts : 0.072577 s à 0.075951 s.
+Buffer 100 :
+Les délais moyens augmentent considérablement, allant jusqu'à 0.772303 s.
+
+Le buffer plus grand peut contenir davantage de paquets en attente, réduisant les pertes, mais augmentant le temps d’attente des paquets en file.
+Cela entraîne des délais beaucoup plus élevés, surtout dans des périodes où la congestion est forte (par exemple, entre 2s et 3s, où la charge TCP et UDP est active).
